@@ -1,0 +1,6 @@
+# Merge this fragment into the existing Compose gateway service.
+# Place mail-router.env beside the Compose file; keep it outside Git.
+services:
+  gateway:
+    env_file:
+      - ./mail-router.env

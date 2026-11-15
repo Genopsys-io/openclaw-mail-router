@@ -1,6 +1,6 @@
 {
   "name": "@genopsys/openclaw-mail-router",
-  "version": "0.3.0-experimental.1",
+  "version": "0.3.0-experimental.2",
   "type": "module",
   "description": "Independent IMAP collector and OpenClaw public webhook router",
   "engines": {
@@ -16,7 +16,8 @@
     "openclaw.plugin.json",
     "README.md",
     "scripts/",
-    "examples/"
+    "examples/",
+    ".env.example"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
@@ -38,5 +39,8 @@
   "bugs": {
     "url": "https://github.com/Genopsys-io/openclaw-mail-router/issues"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "ajv": "8.17.1"
+  }
 }

@@ -1,0 +1,10 @@
+# Merge this fragment into the existing gateway Deployment.
+# Create the Secret separately; do not commit its real values.
+spec:
+  template:
+    spec:
+      containers:
+        - name: gateway
+          envFrom:
+            - secretRef:
+                name: mail-router-env

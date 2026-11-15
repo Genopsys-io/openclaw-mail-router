@@ -2,3 +2,7 @@ node_modules/
 *.tgz
 .DS_Store
 .env
+
+.env.*
+!.env.example
+mail-router.env

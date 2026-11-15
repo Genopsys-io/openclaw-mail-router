@@ -1,8 +1,8 @@
-# Genopsys OpenClaw mail router 0.3.0-experimental.1
+# Genopsys OpenClaw mail router 0.3.0-experimental.2
 
 Prototype indépendant du bundle IMAP d’OpenClaw. Conserve l’identifiant de plugin `santal-mail-router` mais utilise un nouvel état propre et des bibliothèques npm déclarées (`imapflow`, `mailparser`). Aucun import depuis `/app/dist`, aucune empreinte du build 2026.11.3.
 
-État : candidate expérimentale. Les dépendances npm sont installées et verrouillées dans `package-lock.json`. Les 20 tests incluent un vrai parsing MIME et un appel HTTP local vers un serveur de test. La connexion au vrai serveur IMAP, le chargeur OpenClaw et la livraison WhatsApp restent à valider sur l’installation cible.
+État : candidate expérimentale. Les dépendances npm sont installées et verrouillées dans `package-lock.json`. Les 31 tests incluent un vrai parsing MIME et un appel HTTP local vers un serveur de test. La connexion au vrai serveur IMAP, le chargeur OpenClaw et la livraison WhatsApp restent à valider sur l’installation cible.
 
 ## Fonctionnement
 
@@ -77,13 +77,13 @@ La CI GitHub exécute ces contrôles sous Node 22.19.0 et Node 24 et conserve un
 La version du dépôt n’est pas nécessairement publiée sur npm. Une archive construite avec `npm pack` peut être copiée sur l’hôte puis installée via le CLI OpenClaw :
 
 ```sh
-openclaw plugins install /tmp/genopsys-openclaw-mail-router-0.3.0-experimental.1.tgz --no-enable
+openclaw plugins install /tmp/genopsys-openclaw-mail-router-0.3.0-experimental.2.tgz --no-enable
 ```
 
 Adapter les options d’acceptation des capacités à la version du CLI. Préparer la configuration avant activation et ne pas laisser fonctionner l’ancien collecteur en parallèle. Pour l’installation via le registre une fois la version publiée :
 
 ```sh
-openclaw plugins install npm:@genopsys/openclaw-mail-router@0.3.0-experimental.1 --no-enable
+openclaw plugins install npm:@genopsys/openclaw-mail-router@0.3.0-experimental.2 --no-enable
 ```
 
 Le package npm et l’ID OpenClaw sont distincts : le premier est `@genopsys/openclaw-mail-router`, le second reste `santal-mail-router`.
@@ -112,3 +112,71 @@ Pour les publications suivantes, le workflow **Publish npm package** (`.github/w
 Créer/configurer l’environnement GitHub `npm` et ses éventuelles règles d’approbation avant d’utiliser ce workflow. La publication manuelle initiale permet d’accéder aux paramètres du package. Aucun jeton npm de publication permanent n’est requis pour OIDC. Le workflow teste et construit la version indiquée par `package.json` ; modifier sa version avant chaque nouvelle publication.
 
 Référence : [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
+
+
+## Configuration par environnement (0.3.0-experimental.2)
+
+Le mode JSON existant reste inchangé. Pour une boîte IMAP configurée par environnement, activez explicitement ce mode :
+
+```sh
+openclaw config set plugins.entries.santal-mail-router.config '{"fromEnv":true}' --strict-json
+```
+
+Cette commande remplace la configuration du plugin. Sauvegardez-la avant de migrer une instance existante. Ne combinez pas `fromEnv:true` avec `accounts`, `routes`, `recipientNamespaces` ou `startFrom` dans le JSON : le schéma et le runtime refusent ce mélange pour éviter une priorité implicite entre deux configurations.
+
+`openclaw config validate` vérifie la forme du JSON ; la présence et les valeurs des variables sont vérifiées au démarrage du service. Une erreur indique le nom de la variable manquante, sans sa valeur.
+
+Les variables sont lues dans **process.env de la gateway au démarrage du service**, pas dans un fichier `.env` chargé implicitement. Copier `.env.example` vers un fichier privé, remplacer les valeurs fictives puis injecter ce fichier ou un Secret dans le processus gateway. Un export dans un autre shell du conteneur ne modifie pas l’environnement de la gateway déjà démarrée.
+
+### Variables obligatoires pour une route
+
+| Variable | Fonction |
+|---|---|
+| `MAIL_ROUTER_HOST` | Hôte IMAP |
+| `MAIL_ROUTER_USER` | Identifiant IMAP |
+| `MAIL_ROUTER_PASSWORD` | Mot de passe IMAP, jamais recopié dans la configuration persistée |
+| `MAIL_ROUTER_FALLBACK_AGENT_ID` | Agent pour les mails ordinaires, sans publication |
+| `MAIL_ROUTER_ALLOWED_SENDERS` | Adresses ou `@domain`, séparées par des virgules |
+| `MAIL_ROUTER_TRUSTED_AUTHSERV_IDS` | Serveurs d’authentification approuvés, séparés par des virgules |
+| `MAIL_ROUTER_TRUST_RECEIVER` | Doit être exactement `true`, après vérification du traitement des en-têtes par le serveur mail |
+| `MAIL_ROUTER_RECIPIENT` | Alias de la route (ou plusieurs alias du même client, séparés par des virgules) |
+| `MAIL_ROUTER_AGENT_ID` | Agent dédié à cette route |
+| `MAIL_ROUTER_WHATSAPP_GROUP` | Groupe destinataire, au format `123@g.us` |
+
+### Variables facultatives
+
+| Variable | Valeur par défaut |
+|---|---|
+| `MAIL_ROUTER_ACCOUNT_ID` | `shared` |
+| `MAIL_ROUTER_ROUTE_ID` | `default` |
+| `MAIL_ROUTER_RECIPIENT_NAMESPACE` | Valeur de `MAIL_ROUTER_USER` ; obligatoire explicitement si le login n’est pas une adresse principale sans plus-alias |
+| `MAIL_ROUTER_PORT` | `993` (TLS obligatoire) |
+| `MAIL_ROUTER_MAILBOX` | `INBOX` |
+| `MAIL_ROUTER_CHANNEL_ACCOUNT_ID` | `default` |
+| `MAIL_ROUTER_POLL_SECONDS` | `60`, minimum 15 |
+| `MAIL_ROUTER_MAX_BYTES` | `20000`, entre 256 et 1048576 |
+| `MAIL_ROUTER_START_FROM` | Omis : un curseur importé/existant est nécessaire ; `now` initialise au dernier UID, sans traiter les mails déjà présents |
+
+Sur une instance existante, conserver l’ID du compte (par exemple `aisa`) et l’ID de route (par exemple `wety-veille`) pour préserver les curseurs et les identités de requêtes. Ne pas supprimer le répertoire d’état pour tester une autre configuration.
+
+### Plusieurs clients sur la même boîte
+
+Définir `MAIL_ROUTER_ROUTES_JSON` avec le tableau complet de routes au format de `examples/config.json`. Chaque route référence `MAIL_ROUTER_ACCOUNT_ID` (ou `shared` par défaut). Dans ce mode, retirer les variables de route simple : `MAIL_ROUTER_RECIPIENT`, `MAIL_ROUTER_AGENT_ID`, `MAIL_ROUTER_WHATSAPP_GROUP`, `MAIL_ROUTER_CHANNEL_ACCOUNT_ID` et `MAIL_ROUTER_ROUTE_ID`. Un mélange est refusé.
+
+Le mode environnement couvre une boîte IMAP et plusieurs routes. Pour plusieurs boîtes, garder la configuration JSON existante et ses références de secrets par environnement.
+
+### Injection dans Docker ou Kubernetes
+
+Docker Compose : utiliser le fragment `examples/docker-env.yaml` dans le service gateway existant. Le fichier privé doit se nommer `mail-router.env` dans l’exemple. Le plugin lui-même ne lit pas ce fichier.
+
+Kubernetes : créer un Secret depuis un fichier privé (à exécuter avec le bon namespace), puis ajouter le fragment `examples/kubernetes-env.yaml` au Deployment gateway :
+
+```sh
+kubectl -n MON_NAMESPACE create secret generic mail-router-env --from-env-file=mail-router.env
+```
+
+Redémarrer/recréer le conteneur après changement des variables. Un simple rechargement du plugin ne récupère pas les valeurs d’un Secret modifié pour un pod déjà lancé.
+
+Les agents, leurs outils, les bindings WhatsApp et `hooks` restent configurés par OpenClaw. Le plugin ne les crée pas et ne change pas leurs autorisations. Le jeton du webhook peut garder la référence `${MAIL_ROUTER_HOOK_TOKEN}` dans `hooks.token`, mais cette variable n’est pas lue par le générateur de routes et ne configure pas automatiquement les hooks.
+
+Ordre conseillé : injecter l’environnement → configurer les agents/bindings/hooks → définir `fromEnv:true` → valider → redémarrer la gateway → activer le plugin → attendre la baseline avant le premier mail. Le mode environnement est signalé dans les dangerousFlags du manifeste pour rendre visible la confiance dans les assertions du serveur de réception, même sans bloc senderAuth dans le JSON.

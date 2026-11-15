@@ -32,6 +32,10 @@
       {
         "path": "accounts.*.senderAuth.min",
         "equals": "mutable"
+      },
+      {
+        "path": "fromEnv",
+        "equals": true
       }
     ]
   },
@@ -50,6 +54,10 @@
     "accounts.*.senderAuth.min": {
       "label": "Minimum sender authentication",
       "advanced": true
+    },
+    "fromEnv": {
+      "label": "Configure from Gateway environment",
+      "help": "Reads MAIL_ROUTER_* variables. Requires explicit MAIL_ROUTER_TRUST_RECEIVER=true. Do not combine with JSON settings."
     }
   },
   "configGroups": [
@@ -363,12 +371,60 @@
           "now"
         ],
         "description": "Explicit opt-in to baseline existing messages without processing them on first start"
+      },
+      "fromEnv": {
+        "type": "boolean",
+        "default": false,
+        "description": "Use the documented MAIL_ROUTER_* variables from the Gateway process; cannot be mixed with JSON settings"
       }
     },
-    "required": [
-      "accounts",
-      "routes",
-      "recipientNamespaces"
+    "oneOf": [
+      {
+        "required": [
+          "fromEnv"
+        ],
+        "properties": {
+          "fromEnv": {
+            "const": true
+          }
+        },
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "accounts"
+              ]
+            },
+            {
+              "required": [
+                "routes"
+              ]
+            },
+            {
+              "required": [
+                "recipientNamespaces"
+              ]
+            },
+            {
+              "required": [
+                "startFrom"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "required": [
+          "accounts",
+          "routes",
+          "recipientNamespaces"
+        ],
+        "properties": {
+          "fromEnv": {
+            "const": false
+          }
+        }
+      }
     ]
   }
 }

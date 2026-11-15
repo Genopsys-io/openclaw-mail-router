@@ -8,6 +8,7 @@ import {once} from 'node:events';
 import {simpleParser} from 'mailparser';
 import {ImapFlow} from 'imapflow';
 import {sweep} from '../src/collector.mjs';
+import {resolvePluginConfig} from '../src/config.mjs';
 import {StateStore} from '../src/state.mjs';
 import {dispatch} from '../src/webhook.mjs';
 import {buildRequest,validateRouting} from '../src/routes.mjs';
@@ -23,7 +24,7 @@ const source=Buffer.from([
   '',
   'Nouvelle opportunité : formation et accompagnement.',
 ].join('\r\n'));
-test('real MIME parser and loopback HTTP exercise collector-to-webhook path',async()=>{
+for(const mode of ['json','environment'])test(`real MIME parser and loopback HTTP exercise ${mode} collector-to-webhook path`,async()=>{
   assert.equal(typeof ImapFlow,'function');
   const root=mkdtempSync(join(tmpdir(),'mail-router-integration-'));
   const store=new StateStore(root);store.open();
@@ -37,10 +38,11 @@ test('real MIME parser and loopback HTTP exercise collector-to-webhook path',asy
   });
   server.listen(0,'127.0.0.1');await once(server,'listening');
   try{
-    const account={...config.accounts.shared,allowedSenders:['sender@example.org'],senderAuth:{min:'asserted',acceptTrustedAuthservId:true,trustedAuthservIds:['mx.example.org']}};
+    const resolved=mode==='json'?resolvePluginConfig(config):resolvePluginConfig({fromEnv:true},{MAIL_ROUTER_HOST:'imap.example.org',MAIL_ROUTER_USER:'aisa@example.org',MAIL_ROUTER_PASSWORD:'test-only',MAIL_ROUTER_FALLBACK_AGENT_ID:'aisa',MAIL_ROUTER_ALLOWED_SENDERS:'sender@example.org',MAIL_ROUTER_TRUSTED_AUTHSERV_IDS:'mx.example.org',MAIL_ROUTER_TRUST_RECEIVER:'true',MAIL_ROUTER_RECIPIENT:'aisa+alpha@example.org',MAIL_ROUTER_AGENT_ID:'alpha',MAIL_ROUTER_WHATSAPP_GROUP:'111@g.us'});
+    const account={...resolved.accounts.shared,allowedSenders:['sender@example.org'],senderAuth:{min:'asserted',acceptTrustedAuthservId:true,trustedAuthservIds:['mx.example.org']}};
     const client={mailbox:{uidValidity:123n,uidNext:3},getMailboxLock:async()=>({release(){}}),async*fetch(){yield {uid:2,size:source.length};},fetchOne:async()=>({source})};
     const target={...host,gateway:{port:server.address().port}};
-    await sweep({client,parse:simpleParser,state:store,accountId:'shared',account,config,log:{info(){},warn(){}},deliver:value=>dispatch(buildRequest(value,target,config,'shared'),target)});
+    await sweep({client,parse:simpleParser,state:store,accountId:'shared',account,config:resolved,log:{info(){},warn(){}},deliver:value=>dispatch(buildRequest(value,target,resolved,'shared'),target)});
     assert.equal(received.path,'/hooks/agent');assert.equal(received.auth,'Bearer unit-only-hook');
     assert.equal(received.body.agentId,'alpha');assert.equal(received.body.to,'111@g.us');
     assert.match(received.body.message,/Appel à projets/);assert.match(received.body.message,/formation/);
