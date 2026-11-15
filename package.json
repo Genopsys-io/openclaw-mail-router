@@ -15,11 +15,13 @@
     "src/",
     "openclaw.plugin.json",
     "README.md",
-    "scripts/"
+    "scripts/",
+    "examples/"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node --check src/index.mjs"
+    "check": "node scripts/check-syntax.mjs",
+    "prepack": "npm run check && npm test"
   },
   "dependencies": {
     "imapflow": "2.11.0",
@@ -27,5 +29,14 @@
   },
   "publishConfig": {
     "access": "restricted"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Genopsys-io/openclaw-mail-router.git"
+  },
+  "homepage": "https://github.com/Genopsys-io/openclaw-mail-router#readme",
+  "bugs": {
+    "url": "https://github.com/Genopsys-io/openclaw-mail-router/issues"
+  },
+  "license": "UNLICENSED"
 }
