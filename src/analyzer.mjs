@@ -1,9 +1,10 @@
 const MAX_URLS = 5;
 const MAX_ATTACHMENTS = 5;
-const ALLOWED_HOSTS = new Set([
+const BASE_HOSTS = [
   'marches-securises.fr', 'boamp.fr', 'marches-publics.gouv.fr',
   'achatpublic.com', 'aws-achat.info', 'e-marchespublics.com',
-]);
+];
+const ALLOWED_HOSTS = new Set(BASE_HOSTS.flatMap(host => [host, `www.${host}`]));
 
 export function createAnalyzer(env = process.env, fetchImpl = fetch) {
   const url = env.MAIL_ROUTER_ANALYZER_URL;

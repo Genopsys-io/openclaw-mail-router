@@ -1,4 +1,5 @@
 import base64
+import gzip
 import io
 import json
 import os
@@ -48,12 +49,45 @@ class AnalyzerTests(unittest.TestCase):
 
     def test_url_domain_and_scheme_checks(self):
         for value in ["http://boamp.fr/", "https://boamp.fr.evil.example/", "https://boamp.fr@evil.example/",
-                      "https://www.boamp.fr/", "https://boamp.fr:444/"]:
+                      "https://other.boamp.fr/", "https://www.boamp.fr.evil.example/", "https://boamp.fr:444/"]:
             with self.subTest(value=value), self.assertRaises(server.AnalysisError):
                 server.validate_url(value)
         self.assertEqual(server.validate_url("https://boamp.fr/notice").hostname, "boamp.fr")
         for host in server.ALLOWED_HOSTS:
             self.assertEqual(server.validate_url(f"https://{host}/notice").hostname, host)
+
+    def test_www_redirect_is_allowed_and_pinned(self):
+        requests = []
+
+        class FakeResponse:
+            def __init__(self, host):
+                self.status = 301 if host == "boamp.fr" else 200
+                self.body = io.BytesIO(b"notice")
+            def getheader(self, name, default=None):
+                return {"Location": "https://www.boamp.fr/notice",
+                        "Content-Type": "text/plain"}.get(name, default)
+            def read1(self, count):
+                return self.body.read(count)
+
+        class FakeConnection:
+            sock = None
+            def __init__(self, host, ip):
+                self.host = host
+                requests.append((host, ip))
+            def request(self, *args, **kwargs):
+                pass
+            def getresponse(self):
+                return FakeResponse(self.host)
+            def close(self):
+                pass
+
+        with patch.object(server, "public_addresses", return_value=["8.8.8.8"]) as dns, \
+             patch.object(server, "PinnedHTTPSConnection", FakeConnection):
+            final_url, _, _, body = server.download("https://boamp.fr/")
+        self.assertEqual(final_url, "https://www.boamp.fr/notice")
+        self.assertEqual(body, b"notice")
+        self.assertEqual(requests, [("boamp.fr", "8.8.8.8"), ("www.boamp.fr", "8.8.8.8")])
+        self.assertEqual(dns.call_count, 2)
 
     def test_dns_rejects_private_or_mixed_answers(self):
         for addresses in [["8.8.8.8", "127.0.0.1"], ["::1"], ["::ffff:127.0.0.1"], ["224.0.0.1"]]:
@@ -119,6 +153,38 @@ class AnalyzerTests(unittest.TestCase):
         self.assertEqual(requests, [("boamp.fr", "8.8.8.8"), ("GET", "/notice")])
         self.assertIn("Marché", result["documents"][0]["text"])
         self.assertNotIn("hidden", result["documents"][0]["text"])
+
+    def test_gzip_response_is_decompressed_with_size_limit(self):
+        class FakeResponse:
+            status = 200
+            def __init__(self, content):
+                self.body = io.BytesIO(content)
+            def getheader(self, name, default=None):
+                return {"Content-Type": "text/plain", "Content-Encoding": "gzip"}.get(name, default)
+            def read1(self, count):
+                return self.body.read(count)
+
+        class FakeConnection:
+            sock = None
+            def __init__(self, host, ip):
+                pass
+            def request(self, *args, **kwargs):
+                pass
+            def getresponse(self):
+                return FakeResponse(content)
+            def close(self):
+                pass
+
+        with patch.object(server, "public_addresses", return_value=["8.8.8.8"]), \
+             patch.object(server, "PinnedHTTPSConnection", FakeConnection):
+            content = gzip.compress(b"notice")
+            self.assertEqual(server.download("https://boamp.fr/")[3], b"notice")
+            content = gzip.compress(b"x" * (server.MAX_DOCUMENT + 1))
+            with self.assertRaisesRegex(server.AnalysisError, "document_too_large"):
+                server.download("https://boamp.fr/")
+            content = b"not-gzip"
+            with self.assertRaisesRegex(server.AnalysisError, "invalid_compressed_document"):
+                server.download("https://boamp.fr/")
 
     def test_url_rejection_reported_without_request(self):
         with patch.object(server, "public_addresses") as dns:

@@ -1,4 +1,4 @@
-# Genopsys OpenClaw mail router 0.3.0-experimental.3
+# Genopsys OpenClaw mail router 0.3.0-experimental.4
 
 Prototype indépendant du bundle IMAP d’OpenClaw. Conserve l’identifiant de plugin `santal-mail-router` mais utilise un nouvel état propre et des bibliothèques npm déclarées (`imapflow`, `mailparser`). Aucun import depuis `/app/dist`, aucune empreinte du build 2026.11.3.
 
@@ -30,17 +30,18 @@ inclut l'encodage des pièces jointes.
 
 L'extraction accepte uniquement HTTPS sur les hôtes exacts
 `marches-securises.fr`, `boamp.fr`, `marches-publics.gouv.fr`,
-`achatpublic.com`, `aws-achat.info` et `e-marchespublics.com`. Chaque
-redirection est revérifiée, les adresses DNS non publiques sont refusées et
-l'adresse vérifiée est utilisée pour la connexion TLS. Les sous-domaines,
-notamment `www`, ne sont pas implicitement autorisés. Les refus et erreurs
+`achatpublic.com`, `aws-achat.info` et `e-marchespublics.com`, ainsi que leur
+variante `www` explicite. Chaque redirection est revérifiée, les adresses DNS
+non publiques sont refusées et l'adresse vérifiée est utilisée pour la connexion
+TLS. Les autres sous-domaines ne sont pas autorisés. Les refus et erreurs
 sont inclus dans l'analyse ; les liens hors liste sont comptés et aucun accès
 n'est tenté sur un domaine refusé. Les connexions sortantes utilisent IPv4 ;
 un site uniquement IPv6 est signalé comme inaccessible.
 Les pages dépendantes de JavaScript ne sont pas rendues.
 
 Le service accepte au maximum cinq PDF et cinq liens par mail, 1 Mio par
-document téléchargé, 20 pages par PDF et 40 000 caractères extraits au total.
+document téléchargé avant et après décompression gzip, 20 pages par PDF et
+40 000 caractères extraits au total.
 Le texte transmis au webhook respecte `maxBytes` et signale sa troncature.
 `includeBody: false` empêche l'extraction de liens depuis le corps du mail.
 Tout texte extrait reste une donnée externe non fiable, et peut être transmis
@@ -138,13 +139,13 @@ La CI GitHub exécute ces contrôles sous Node 22.19.0 et Node 24 et conserve un
 La version du dépôt n’est pas nécessairement publiée sur npm. Une archive construite avec `npm pack` peut être copiée sur l’hôte puis installée via le CLI OpenClaw :
 
 ```sh
-openclaw plugins install /tmp/genopsys-openclaw-mail-router-0.3.0-experimental.3.tgz --no-enable
+openclaw plugins install /tmp/genopsys-openclaw-mail-router-0.3.0-experimental.4.tgz --no-enable
 ```
 
 Adapter les options d’acceptation des capacités à la version du CLI. Préparer la configuration avant activation et ne pas laisser fonctionner l’ancien collecteur en parallèle. Pour l’installation via le registre une fois la version publiée :
 
 ```sh
-openclaw plugins install npm:@genopsys/openclaw-mail-router@0.3.0-experimental.3 --no-enable
+openclaw plugins install npm:@genopsys/openclaw-mail-router@0.3.0-experimental.4 --no-enable
 ```
 
 Le package npm et l’ID OpenClaw sont distincts : le premier est `@genopsys/openclaw-mail-router`, le second reste `santal-mail-router`.

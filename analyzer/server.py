@@ -10,6 +10,7 @@ import os
 import socket
 import ssl
 import time
+import zlib
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from email.message import Message
@@ -18,10 +19,11 @@ from urllib.parse import urljoin, urlsplit
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-ALLOWED_HOSTS = frozenset({
+BASE_HOSTS = {
     "marches-securises.fr", "boamp.fr", "marches-publics.gouv.fr",
     "achatpublic.com", "aws-achat.info", "e-marchespublics.com",
-})
+}
+ALLOWED_HOSTS = frozenset(host for base in BASE_HOSTS for host in (base, "www." + base))
 MAX_REQUEST = 2 * 1024 * 1024
 MAX_DOCUMENT = 1024 * 1024
 MAX_TEXT = 12000
@@ -105,7 +107,7 @@ def download(url):
             if response.status != 200:
                 raise AnalysisError("http_error")
             encoding = response.getheader("Content-Encoding", "identity").lower()
-            if encoding != "identity":
+            if encoding not in {"identity", "gzip"}:
                 raise AnalysisError("unsupported_encoding")
             content_header = response.getheader("Content-Type", "")
             content_type = content_header.split(";", 1)[0].strip().lower()
@@ -126,7 +128,18 @@ def download(url):
                 size += len(chunk)
                 if size > MAX_DOCUMENT:
                     raise AnalysisError("document_too_large")
-            return url, content_type, charset, b"".join(chunks)
+            body = b"".join(chunks)
+            if encoding == "gzip":
+                try:
+                    decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+                    body = decoder.decompress(body, MAX_DOCUMENT + 1)
+                except zlib.error as error:
+                    raise AnalysisError("invalid_compressed_document") from error
+                if len(body) > MAX_DOCUMENT:
+                    raise AnalysisError("document_too_large")
+                if not decoder.eof or decoder.unused_data:
+                    raise AnalysisError("invalid_compressed_document")
+            return url, content_type, charset, body
         except (OSError, http.client.HTTPException, ssl.SSLError) as error:
             raise AnalysisError("network_error") from error
         finally:

@@ -49,11 +49,11 @@ test('links outside the allowlist are skipped before calling the service', async
   let request;
   const analyze = createAnalyzer(env, async (_, options) => {
     request = JSON.parse(options.body);
-    return new Response(JSON.stringify({documents:[{text:'page'}]}));
+    return new Response(JSON.stringify({documents:[{text:'page'},{text:'www page'}]}));
   });
-  const result = await analyze({text:'https://boamp.fr/a https://evil.example/x https://boamp.fr.evil.example/'});
-  assert.deepEqual(request.urls, ['https://boamp.fr/a']);
-  assert.equal(result.skippedUrls, 2);
+  const result = await analyze({text:'https://boamp.fr/a https://www.boamp.fr/b https://evil.example/x https://boamp.fr.evil.example/ https://other.boamp.fr/'});
+  assert.deepEqual(request.urls, ['https://boamp.fr/a', 'https://www.boamp.fr/b']);
+  assert.equal(result.skippedUrls, 3);
 });
 
 test('analysis message stays valid JSON within byte budget with explicit truncation', () => {
