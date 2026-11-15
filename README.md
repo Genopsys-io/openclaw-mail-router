@@ -2,7 +2,7 @@
 
 Prototype indépendant du bundle IMAP d’OpenClaw. Conserve l’identifiant de plugin `santal-mail-router` mais utilise un nouvel état propre et des bibliothèques npm déclarées (`imapflow`, `mailparser`). Aucun import depuis `/app/dist`, aucune empreinte du build 2026.11.3.
 
-État réel : 18 tests locaux passés avec clients IMAP, parsing et HTTP simulés. Dépendances non installées : la tentative npm hors ligne a échoué (`ENOTCACHED` pour imapflow) et l’accès réseau n’a pas été accordé. Aucun lockfile validé, aucun test du vrai parseur, de TLS, de l’instance OpenClaw ou de WhatsApp pour cette version. Ne pas publier cette candidate comme validée.
+État : candidate expérimentale. Les dépendances npm sont installées et verrouillées dans `package-lock.json`. Les 20 tests incluent un vrai parsing MIME et un appel HTTP local vers un serveur de test. La connexion au vrai serveur IMAP, le chargeur OpenClaw et la livraison WhatsApp restent à valider sur l’installation cible.
 
 ## Fonctionnement
 
@@ -49,11 +49,66 @@ Les routes restent au format de la 0.2. Si Aisa tourne encore avec les routes WE
 
 ## Étapes restantes sur l’installation expérimentale
 
-1. Accorder les accès réseau et au cluster (non obtenus pendant cette préparation).
-2. Installer les dépendances, vérifier les versions publiées, générer et examiner le package-lock, lancer les tests avec les vrais parseurs et une connexion IMAP de lecture seule.
+1. Disposer de l’accès au cluster de test.
+2. Installer avec `npm ci --ignore-scripts`, lancer les tests puis vérifier une connexion IMAP de lecture seule.
 3. Sauvegarder et inspecter Aisa : version, plugin actif, configuration sans affichage des secrets, états et logs récents.
 4. Décider baseline ou import de curseur, arrêter l’ancien collecteur, installer la candidate désactivée, valider la configuration et reprendre.
 5. Envoyer un nouveau mail autorisé ; vérifier UID, run de l’agent WETY et présence du résumé dans le groupe. Tester un mail ordinaire, un alias inconnu et une reprise après redémarrage.
 6. Réactiver l’ancienne version en cas d’échec, après réconciliation des UID traités pendant le test pour éviter une double publication.
 
 Documentation des dépendances : https://imapflow.com/docs/api/imapflow-client/ et https://nodemailer.com/extras/mailparser/.
+
+
+## Développement et vérification
+
+```sh
+git clone https://github.com/Genopsys-io/openclaw-mail-router.git
+cd openclaw-mail-router
+npm ci --ignore-scripts
+npm run check
+npm test
+npm pack
+```
+
+La CI GitHub exécute ces contrôles sous Node 22.19.0 et Node 24 et conserve une archive npm en artefact. Aucun mail réel n’est utilisé et aucun message WhatsApp n’est envoyé par la CI. Le fichier `examples/config.json` est fictif ; adapter ses comptes, routes et références d’environnement dans la configuration de l’instance.
+
+## Installation depuis une archive
+
+La version du dépôt n’est pas nécessairement publiée sur npm. Une archive construite avec `npm pack` peut être copiée sur l’hôte puis installée via le CLI OpenClaw :
+
+```sh
+openclaw plugins install /tmp/genopsys-openclaw-mail-router-0.3.0-experimental.1.tgz --no-enable
+```
+
+Adapter les options d’acceptation des capacités à la version du CLI. Préparer la configuration avant activation et ne pas laisser fonctionner l’ancien collecteur en parallèle. Pour l’installation via le registre une fois la version publiée :
+
+```sh
+openclaw plugins install npm:@genopsys/openclaw-mail-router@0.3.0-experimental.1 --no-enable
+```
+
+Le package npm et l’ID OpenClaw sont distincts : le premier est `@genopsys/openclaw-mail-router`, le second reste `santal-mail-router`.
+
+## Publication npm
+
+Le package conserve `publishConfig.access: restricted`. Il faut disposer du scope npm `@genopsys` avec les droits et l’offre nécessaires ; l’existence de l’organisation GitHub ne confère aucun droit npm. Aucun secret d’installation client n’appartient au dépôt ni au package. Aucune licence de redistribution n’a été choisie : les métadonnées indiquent `UNLICENSED`.
+
+Avant une première publication, valider la candidate sur OpenClaw, puis un mainteneur peut publier explicitement depuis son poste authentifié :
+
+```sh
+npm ci --ignore-scripts
+npm login
+npm publish --tag experimental
+```
+
+`prepack` exécute la vérification de syntaxe et les tests avant construction/publication. Une préversion ne doit pas devenir `latest`.
+
+Pour les publications suivantes, le workflow **Publish npm package** (`.github/workflows/publish.yml`) est uniquement manuel et refuse les branches autres que `main`. Il utilise l’environnement GitHub `npm` et OIDC. Dans les paramètres npm du package, ajouter un trusted publisher avec les valeurs exactes :
+
+- GitHub owner : `Genopsys-io`
+- Repository : `openclaw-mail-router`
+- Workflow filename : `publish.yml`
+- Environment : `npm`
+
+Créer/configurer l’environnement GitHub `npm` et ses éventuelles règles d’approbation avant d’utiliser ce workflow. La publication manuelle initiale permet d’accéder aux paramètres du package. Aucun jeton npm de publication permanent n’est requis pour OIDC. Le workflow teste et construit la version indiquée par `package.json` ; modifier sa version avant chaque nouvelle publication.
+
+Référence : [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).

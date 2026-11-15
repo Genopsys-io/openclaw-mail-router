@@ -1,0 +1,30 @@
+{
+  "startFrom": "now",
+  "recipientNamespaces": ["assistant@example.org"],
+  "accounts": {
+    "shared": {
+      "host": "imap.example.org",
+      "port": 993,
+      "secure": true,
+      "user": {"source": "env", "provider": "default", "id": "MAIL_ROUTER_USER"},
+      "password": {"source": "env", "provider": "default", "id": "MAIL_ROUTER_PASSWORD"},
+      "mailbox": "INBOX",
+      "allowedSenders": ["operator@example.org"],
+      "senderAuth": {"min": "asserted", "acceptTrustedAuthservId": true, "trustedAuthservIds": ["mx.example.org"]},
+      "agentId": "mail-reader",
+      "deliver": false,
+      "watch": {"mode": "interval", "pollSeconds": 60},
+      "includeBody": true,
+      "maxBytes": 20000
+    }
+  },
+  "routes": [
+    {
+      "id": "client-a",
+      "accountId": "shared",
+      "recipients": ["assistant+client-a@example.org"],
+      "agentId": "client-a",
+      "delivery": {"channel": "whatsapp", "accountId": "default", "to": "111111111@g.us"}
+    }
+  ]
+}

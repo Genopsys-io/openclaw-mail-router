@@ -1,12 +1,9 @@
-# Validation — candidate 0.3.0-experimental.1
+# Validation de la candidate 0.3.0-experimental.1
 
-- 18 tests locaux passent, sans dépendance aux fichiers internes d’OpenClaw.
-- Le collecteur est testé avec un client IMAP simulé et un parseur simulé ; le webhook avec un transport HTTP simulé.
-- Les tests couvrent notamment baseline explicite, curseur persistant, verrou exclusif, blocage des renvois incertains, changement UIDVALIDITY, deux clients, fallback, contrôle des expéditeurs et des assertions d’authentification.
-- `npm run check` passe.
-- Les versions des dépendances ont été relevées dans leurs dépôts upstream ; leur résolution par npm reste à vérifier.
-- `npm install --offline` a échoué avec ENOTCACHED pour imapflow. Les accès réseau/écriture demandés n’ont pas été accordés dans cette session.
-- Aucun test des dépendances réellement installées, du parseur sur les mails OVH, du chargement OpenClaw ni d’une publication WhatsApp pour cette version.
-- Aucun changement au dépôt openclaw-factory ou à l’instance Aisa, aucune publication npm/GitHub.
+- Installation réelle des 46 packages npm réussie ; versions directes épinglées et dépendances transitives verrouillées dans package-lock.json.
+- 20 tests passent : routage multi-client, fallback, permissions, états, verrou, reprise après résultat incertain, authentification, MIME réel et HTTP local.
+- Vérification de syntaxe de tous les fichiers src/scripts/test réussie.
+- npm pack réussi ; seuls code, manifeste, exemples génériques et documentation entrent dans l’archive. Les tests et fichiers GitHub ne sont pas publiés.
+- Les workflows vérifient Node 22.19.0/24 et préparent une publication npm manuelle sur main, après configuration du trusted publisher.
 
-La candidate est préparée pour poursuivre le développement et les essais, pas validée pour être activée sans contrôle. Le choix entre baseline des nouveaux mails et reprise par import du curseur n’a pas encore été confirmé.
+Restent à valider : accès TLS au vrai serveur IMAP, parsing des en-têtes OVH réels, cycle de vie du service dans OpenClaw, livraison WhatsApp et migration/rollback sur Aisa. Aucun test de cette branche n’envoie de mail ou de message réel. Aucune publication npm et aucun déploiement ne sont réalisés par cette préparation.
