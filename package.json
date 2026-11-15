@@ -1,0 +1,31 @@
+{
+  "name": "@genopsys/openclaw-mail-router",
+  "version": "0.3.0-experimental.1",
+  "type": "module",
+  "description": "Independent IMAP collector and OpenClaw public webhook router",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./src/index.mjs"
+    ]
+  },
+  "files": [
+    "src/",
+    "openclaw.plugin.json",
+    "README.md",
+    "scripts/"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/index.mjs"
+  },
+  "dependencies": {
+    "imapflow": "2.11.0",
+    "mailparser": "3.14.3"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  }
+}
