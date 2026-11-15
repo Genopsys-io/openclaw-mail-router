@@ -3,7 +3,8 @@ import {homedir} from 'node:os';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {StateStore} from './state.mjs';
 import {sweep} from './collector.mjs';
-import {validateRouting,buildRequest} from './routes.mjs';
+import {buildRequest} from './routes.mjs';
+import {resolvePluginConfig} from './config.mjs';
 import {dispatch,resolveEnv} from './webhook.mjs';
 export default {
   id:'santal-mail-router',name:'Genopsys mail router',
@@ -17,7 +18,7 @@ export default {
     api.registerService({id:'santal-mail-watch',apiVersion:2,stop,
       async start(context){
         await stop();
-        const config=structuredClone(api.pluginConfig);validateRouting(config);
+        const config=resolvePluginConfig(api.pluginConfig);
         if(!api.config.hooks?.enabled||!resolveEnv(api.config.hooks.token))throw new Error('Configure the public agent webhook before activation');
         for(const route of config.routes) {
           buildRequest({santalRecipientRoute:{id:route.id},idempotencyKey:'preflight',message:''},api.config,config,route.accountId);
