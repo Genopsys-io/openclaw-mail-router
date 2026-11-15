@@ -6,6 +6,7 @@ import {sweep} from './collector.mjs';
 import {buildRequest} from './routes.mjs';
 import {resolvePluginConfig} from './config.mjs';
 import {dispatch,resolveEnv} from './webhook.mjs';
+import {createAnalyzer} from './analyzer.mjs';
 export default {
   id:'santal-mail-router',name:'Genopsys mail router',
   register(api) {
@@ -19,6 +20,7 @@ export default {
       async start(context){
         await stop();
         const config=resolvePluginConfig(api.pluginConfig);
+        const analyze=createAnalyzer();
         if(!api.config.hooks?.enabled||!resolveEnv(api.config.hooks.token))throw new Error('Configure the public agent webhook before activation');
         for(const route of config.routes) {
           buildRequest({santalRecipientRoute:{id:route.id},idempotencyKey:'preflight',message:''},api.config,config,route.accountId);
@@ -53,7 +55,7 @@ export default {
               client.on('error',()=>{});clients.push(client);
               try{
                 await client.connect();
-                await sweep({client,parse:simpleParser,state:store,accountId,account,config,deliver,log:context.logger,signal});
+                await sweep({client,parse:simpleParser,state:store,accountId,account,config,deliver,analyze,log:context.logger,signal});
               }catch{
                 context.logger.warn(`mail-router: account=${accountId} sweep failed; inspect cursor/pending state and connection (credentials withheld)`);
               }finally{client.close();clients=clients.filter(c=>c!==client);}

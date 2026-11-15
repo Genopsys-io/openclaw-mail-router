@@ -1,6 +1,6 @@
 {
   "name": "@genopsys/openclaw-mail-router",
-  "version": "0.3.0-experimental.2",
+  "version": "0.3.0-experimental.3",
   "type": "module",
   "description": "Independent IMAP collector and OpenClaw public webhook router",
   "engines": {
@@ -14,6 +14,7 @@
   "files": [
     "src/",
     "openclaw.plugin.json",
+    "npm-shrinkwrap.json",
     "README.md",
     "scripts/",
     "examples/",
