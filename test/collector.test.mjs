@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {StateStore} from '../src/state.mjs';
 import {sweep} from '../src/collector.mjs';
+import {MAX_EMAIL_SIZE} from '../src/limits.mjs';
 import {authorize} from '../src/auth.mjs';
 import {config as fixture,mail} from './fixtures.mjs';
 const account={...fixture.accounts.shared,allowedSenders:['sender@example.org'],senderAuth:{min:'asserted',acceptTrustedAuthservId:true,trustedAuthservIds:['mx.example.org']}};
@@ -47,6 +48,33 @@ test('authorized mail is analyzed before dispatch; failure preserves cursor for 
     deliver:async value=>{sent++;assert.match(value.message,/Notice text/);return {runId:'run',completion:{status:'ok',delivered:true}};},
   }));
   assert.equal(sent,1);assert.equal(state.data.mailboxes.shared.lastSeenUid,2);
+}));
+test('accepts a MIME message at the 15 MiB limit',async()=>fixtureTest(async state=>{
+  cursor(state);let parsedBytes=0;
+  const c=client([{uid:2,size:MAX_EMAIL_SIZE}]);
+  c.fetchOne=async()=>({source:Buffer.alloc(MAX_EMAIL_SIZE)});
+  await sweep(options(state,{client:c,parse:async source=>{parsedBytes=source.length;return parsed();}}));
+  assert.equal(parsedBytes,MAX_EMAIL_SIZE);
+  assert.equal(state.data.mailboxes.shared.lastSeenUid,2);
+  assert.equal(state.data.mailboxes.shared.outcomes[0].status,'completed');
+}));
+test('skips messages larger than 15 MiB without fetching their body',async()=>fixtureTest(async state=>{
+  cursor(state);let fetched=false,parsedBytes=0;
+  const c=client([{uid:2,size:MAX_EMAIL_SIZE+1}]);
+  c.fetchOne=async()=>{fetched=true;return {source:Buffer.alloc(1)};};
+  await sweep(options(state,{client:c,parse:async source=>{parsedBytes=source.length;return parsed();}}));
+  assert.equal(fetched,false);
+  assert.equal(parsedBytes,0);
+  assert.equal(state.data.mailboxes.shared.lastSeenUid,2);
+  assert.equal(state.data.mailboxes.shared.outcomes[0].status,'message-too-large');
+}));
+test('rejects a fetched MIME body above 15 MiB even when IMAP size is smaller',async()=>fixtureTest(async state=>{
+  cursor(state);let parsedBytes=0;
+  const c=client([{uid:2,size:MAX_EMAIL_SIZE}]);
+  c.fetchOne=async()=>({source:Buffer.alloc(MAX_EMAIL_SIZE+1)});
+  await sweep(options(state,{client:c,parse:async source=>{parsedBytes=source.length;return parsed();}}));
+  assert.equal(parsedBytes,0);
+  assert.equal(state.data.mailboxes.shared.outcomes[0].status,'message-too-large');
 }));
 test('rejected mail is never sent to the analyzer',async()=>fixtureTest(async state=>{
   cursor(state);let analyzed=0;

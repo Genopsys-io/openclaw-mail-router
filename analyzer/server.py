@@ -24,8 +24,10 @@ BASE_HOSTS = {
     "achatpublic.com", "aws-achat.info", "e-marchespublics.com",
 }
 ALLOWED_HOSTS = frozenset(host for base in BASE_HOSTS for host in (base, "www." + base))
-MAX_REQUEST = 2 * 1024 * 1024
+MAX_EMAIL_SIZE = 15 * 1024 * 1024
+MAX_REQUEST = ((MAX_EMAIL_SIZE + 2) // 3) * 4 + 1024 * 1024
 MAX_DOCUMENT = 1024 * 1024
+MAX_ATTACHMENT = MAX_EMAIL_SIZE
 MAX_TEXT = 12000
 MAX_URLS = 5
 MAX_ATTACHMENTS = 5
@@ -168,8 +170,10 @@ class VisibleText(HTMLParser):
             self.parts.append(data)
 
 
-def extract_pdf(data):
-    if len(data) > MAX_DOCUMENT or not data.startswith(b"%PDF-"):
+def extract_pdf(data, max_size=MAX_DOCUMENT):
+    if len(data) > max_size:
+        raise AnalysisError("document_too_large")
+    if not data.startswith(b"%PDF-"):
         raise AnalysisError("invalid_pdf")
     try:
         reader = PdfReader(io.BytesIO(data), strict=True)
@@ -201,7 +205,7 @@ def analyze(payload):
             raise AnalysisError("invalid_attachment")
         try:
             raw = base64.b64decode(encoded, validate=True)
-            result = extract_pdf(raw)
+            result = extract_pdf(raw, MAX_ATTACHMENT)
             results.append({"source": "attachment", "name": name, **result})
         except (binascii.Error, ValueError):
             results.append({"source": "attachment", "name": name, "error": "invalid_base64"})

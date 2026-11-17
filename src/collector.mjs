@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {selectRoute} from './routes.mjs';
 import {authorize} from './auth.mjs';
 import {analysisMessage} from './analyzer.mjs';
+import {MAX_EMAIL_SIZE} from './limits.mjs';
 export async function sweep({client,parse,state,accountId,account,config,deliver,analyze,log,signal}) {
   const lock=await client.getMailboxLock(account.mailbox||'INBOX',{readOnly:true});
   try{
@@ -30,10 +31,10 @@ export async function sweep({client,parse,state,accountId,account,config,deliver
         cursor.outcomes.push({uid:item.uid,status,...detail,at:new Date().toISOString()});cursor.outcomes=cursor.outcomes.slice(-200);state.save();
         log.info(`mail-router: account=${accountId} uid=${item.uid} status=${status}`);
       };
-      if(!Number.isFinite(item.size)||item.size>1048576){finish('message-too-large');continue;}
+      if(!Number.isFinite(item.size)||item.size>MAX_EMAIL_SIZE){finish('message-too-large');continue;}
       const full=await client.fetchOne(item.uid,{source:true},{uid:true});
       if(!full?.source){finish('message-removed');continue;}
-      if(full.source.length>1048576){finish('message-too-large');continue;}
+      if(full.source.length>MAX_EMAIL_SIZE){finish('message-too-large');continue;}
       let mail;try{mail=await parse(full.source,{skipHtmlToText:false,skipImageLinks:true,skipTextToHtml:true});}catch{finish('parse-failed');continue;}
       const route=selectRoute(mail,config,accountId);
       if(route?.reject){finish(route.reason);continue;}

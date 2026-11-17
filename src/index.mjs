@@ -7,6 +7,7 @@ import {buildRequest} from './routes.mjs';
 import {resolvePluginConfig} from './config.mjs';
 import {dispatch,resolveEnv} from './webhook.mjs';
 import {createAnalyzer} from './analyzer.mjs';
+import {MAX_EMAIL_SIZE} from './limits.mjs';
 export default {
   id:'santal-mail-router',name:'Genopsys mail router',
   register(api) {
@@ -51,7 +52,7 @@ export default {
           };
           tasks.push((async()=>{
             while(!signal.aborted){
-              const client=new ImapFlow({host:account.host,port:account.port||993,secure:true,auth:{user:account.user,pass:account.password},logger:false,maxLiteralSize:1048576,maxResponseSize:2097152,connectionTimeout:20000,greetingTimeout:20000,socketTimeout:60000});
+              const client=new ImapFlow({host:account.host,port:account.port||993,secure:true,auth:{user:account.user,pass:account.password},logger:false,maxLiteralSize:MAX_EMAIL_SIZE,maxResponseSize:MAX_EMAIL_SIZE+1024*1024,connectionTimeout:20000,greetingTimeout:20000,socketTimeout:60000});
               client.on('error',()=>{});clients.push(client);
               try{
                 await client.connect();

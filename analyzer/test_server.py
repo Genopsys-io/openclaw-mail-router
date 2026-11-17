@@ -47,6 +47,16 @@ class AnalyzerTests(unittest.TestCase):
         self.assertIn("Call for tenders", documents[0]["text"])
         self.assertEqual(documents[1]["error"], "invalid_pdf")
 
+    def test_attachment_pdf_limit_is_15_mib_while_download_limit_stays_1_mib(self):
+        small_pdf = pdf()
+        large_pdf = small_pdf + b"\n%" + b"x" * (server.MAX_ATTACHMENT - len(small_pdf) - 2)
+        self.assertEqual(len(large_pdf), server.MAX_ATTACHMENT)
+        document = server.extract_pdf(large_pdf, server.MAX_ATTACHMENT)
+        self.assertIn("Call for tenders", document["text"])
+        with self.assertRaisesRegex(server.AnalysisError, "document_too_large"):
+            server.extract_pdf(b"%PDF-" + b"x" * server.MAX_ATTACHMENT, server.MAX_ATTACHMENT)
+        self.assertEqual(server.MAX_DOCUMENT, 1024 * 1024)
+
     def test_url_domain_and_scheme_checks(self):
         for value in ["http://boamp.fr/", "https://boamp.fr.evil.example/", "https://boamp.fr@evil.example/",
                       "https://other.boamp.fr/", "https://www.boamp.fr.evil.example/", "https://boamp.fr:444/"]:
@@ -208,6 +218,19 @@ class AnalyzerTests(unittest.TestCase):
             payload = '{"attachments":[{"name":"notice.pdf","data":"' + base64.b64encode(pdf()).decode() + '"}],"urls":[]}'
             connection = HTTPConnection("127.0.0.1", httpd.server_port, timeout=5)
             connection.request("POST", "/analyze", body=payload, headers={"Authorization": "Bearer " + httpd.token.decode()})
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertIn(b"Call for tenders", response.read())
+            connection.close()
+
+            small_pdf = pdf()
+            large_pdf = small_pdf + b"\n%" + b"x" * (server.MAX_ATTACHMENT - len(small_pdf) - 2)
+            large_data = base64.b64encode(large_pdf).decode()
+            payload = json.dumps({"attachments": [{"name": "large.pdf", "data": large_data}], "urls": []})
+            self.assertGreater(len(payload), 20 * 1024 * 1024)
+            connection = HTTPConnection("127.0.0.1", httpd.server_port, timeout=30)
+            connection.request("POST", "/analyze", body=payload,
+                               headers={"Authorization": "Bearer " + httpd.token.decode()})
             response = connection.getresponse()
             self.assertEqual(response.status, 200)
             self.assertIn(b"Call for tenders", response.read())
