@@ -35,6 +35,33 @@ test('uncertain dispatch survives restart and never automatically resends',async
   const saved=JSON.parse(readFileSync(join(root,'state.json'),'utf8'));assert.equal(saved.mailboxes.shared.pending.status,'prepared');
   await assert.rejects(sweep(options(state,{deliver:async()=>{sent++;}})),/previous dispatch/);assert.equal(sent,1);
 }));
+test('authorized mail is analyzed before dispatch; failure preserves cursor for retry',async()=>fixtureTest(async state=>{
+  cursor(state);let sent=0,analyzed=0;
+  await assert.rejects(sweep(options(state,{
+    analyze:async()=>{analyzed++;throw new Error('analyzer unavailable');},
+    deliver:async()=>{sent++;},
+  })),/analyzer unavailable/);
+  assert.equal(analyzed,1);assert.equal(sent,0);assert.equal(state.data.mailboxes.shared.lastSeenUid,1);
+  await sweep(options(state,{
+    analyze:async()=>({documents:[{source:'attachment',text:'Notice text'}]}),
+    deliver:async value=>{sent++;assert.match(value.message,/Notice text/);return {runId:'run',completion:{status:'ok',delivered:true}};},
+  }));
+  assert.equal(sent,1);assert.equal(state.data.mailboxes.shared.lastSeenUid,2);
+}));
+test('rejected mail is never sent to the analyzer',async()=>fixtureTest(async state=>{
+  cursor(state);let analyzed=0;
+  await sweep(options(state,{parse:async()=>parsed('aisa+unknown@example.org'),analyze:async()=>{analyzed++;}}));
+  assert.equal(analyzed,0);
+}));
+test('body-disabled accounts do not send body or HTML to the analyzer',async()=>fixtureTest(async state=>{
+  cursor(state);let received;
+  await sweep(options(state,{
+    account:{...account,includeBody:false},
+    parse:async()=>({...parsed(),html:'<a href="https://boamp.fr/">link</a>'}),
+    analyze:async value=>{received=value;return {documents:[]};},
+  }));
+  assert.equal(received.text,'');assert.equal(received.html,'');
+}));
 test('UIDVALIDITY change halts instead of replaying mailbox',async()=>fixtureTest(async state=>{
   cursor(state);const c=client();c.mailbox.uidValidity=456n;await assert.rejects(sweep(options(state,{client:c})),/UIDVALIDITY/);
 }));

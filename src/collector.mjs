@@ -1,7 +1,8 @@
 import {createHash} from 'node:crypto';
 import {selectRoute} from './routes.mjs';
 import {authorize} from './auth.mjs';
-export async function sweep({client,parse,state,accountId,account,config,deliver,log,signal}) {
+import {analysisMessage} from './analyzer.mjs';
+export async function sweep({client,parse,state,accountId,account,config,deliver,analyze,log,signal}) {
   const lock=await client.getMailboxLock(account.mailbox||'INBOX',{readOnly:true});
   try{
     const mailbox=client.mailbox;
@@ -40,7 +41,9 @@ export async function sweep({client,parse,state,accountId,account,config,deliver
       const digest=mail.messageId?createHash('sha256').update(mail.messageId).digest('hex'):null;
       if(digest&&cursor.recent.includes(digest)){finish('duplicate-message-id');continue;}
       const key=`santal-imap:${accountId}:${validity}:${item.uid}`;
-      const content=JSON.stringify({from:verdict.sender,subject:mail.subject||'',text:account.includeBody===false?'':mail.text||'',attachments:(mail.attachments||[]).map(a=>a.filename||'unnamed')});
+      const content=analyze
+        ? analysisMessage({...mail,text:account.includeBody===false?'':mail.text||''},verdict.sender,await analyze(account.includeBody===false?{...mail,text:'',html:''}:mail,{signal}),account.maxBytes||20000)
+        : JSON.stringify({from:verdict.sender,subject:mail.subject||'',text:account.includeBody===false?'':mail.text||'',attachments:(mail.attachments||[]).map(a=>a.filename||'unnamed')});
       // Persist intent BEFORE the external side effect. A crash blocks this UID for manual reconciliation.
       cursor.pending={uid:item.uid,idempotencyKey:key,status:'prepared'};state.save();
       let result;

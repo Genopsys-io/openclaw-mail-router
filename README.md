@@ -1,14 +1,76 @@
-# Genopsys OpenClaw mail router 0.3.0-experimental.2
+# Genopsys OpenClaw mail router 0.3.0-experimental.4
 
 Prototype indépendant du bundle IMAP d’OpenClaw. Conserve l’identifiant de plugin `santal-mail-router` mais utilise un nouvel état propre et des bibliothèques npm déclarées (`imapflow`, `mailparser`). Aucun import depuis `/app/dist`, aucune empreinte du build 2026.11.3.
 
-État : candidate expérimentale. Les dépendances npm sont installées et verrouillées dans `package-lock.json`. Les 31 tests incluent un vrai parsing MIME et un appel HTTP local vers un serveur de test. La connexion au vrai serveur IMAP, le chargeur OpenClaw et la livraison WhatsApp restent à valider sur l’installation cible.
+État : candidate expérimentale. Les dépendances npm sont verrouillées dans
+`npm-shrinkwrap.json`, inclus dans l'archive pour les installations. Les tests
+incluent un vrai parsing MIME et des appels HTTP locaux. La connexion au vrai
+serveur IMAP et la livraison WhatsApp restent à valider sur l’installation cible.
 
 ## Fonctionnement
 
 `index.mjs` enregistre le service OpenClaw et démarre un polling IMAP (60 s par défaut). `collector.mjs` traite les UID successifs, limite les messages à 1 Mio et utilise uniquement une boîte ouverte en lecture seule. `auth.mjs` contrôle l’expéditeur autorisé et une assertion DMARC du serveur de réception explicitement approuvé. `routes.mjs` choisit la route et vérifie l’agent et son binding. `webhook.mjs` utilise uniquement le point d’entrée HTTP public `/hooks/agent`, y compris pour le fallback sans publication.
 
 L’indépendance porte sur le collecteur : le plugin reste dépendant des contrats publics de service et de webhook d’OpenClaw, dont la compatibilité doit être testée sur les versions ciblées.
+
+## Analyse documentaire expérimentale
+
+L'analyse documentaire est désactivée par défaut. Lorsqu'elle est activée, le
+collecteur appelle un service séparé **après** validation du destinataire et de
+l'expéditeur, avant l'enregistrement de l'intention de livraison. Si l'analyse
+échoue, le curseur reste inchangé et aucun webhook n'est envoyé. Une nouvelle
+tentative peut refaire les GET des liens ; elle ne renvoie pas automatiquement
+un webhook déjà admis.
+
+Le service extrait le texte des PDF et des pages HTML ou texte. Les PDF sans
+texte sont signalés : l'OCR et les formats Office ne sont pas pris en charge.
+Les noms des autres pièces jointes sont rapportés comme non traités. Le
+collecteur continue de refuser les messages MIME dépassant 1 Mio ; ce plafond
+inclut l'encodage des pièces jointes.
+
+L'extraction accepte uniquement HTTPS sur les hôtes exacts
+`marches-securises.fr`, `boamp.fr`, `marches-publics.gouv.fr`,
+`achatpublic.com`, `aws-achat.info` et `e-marchespublics.com`, ainsi que leur
+variante `www` explicite. Chaque redirection est revérifiée, les adresses DNS
+non publiques sont refusées et l'adresse vérifiée est utilisée pour la connexion
+TLS. Les autres sous-domaines ne sont pas autorisés. Les refus et erreurs
+sont inclus dans l'analyse ; les liens hors liste sont comptés et aucun accès
+n'est tenté sur un domaine refusé. Les connexions sortantes utilisent IPv4 ;
+un site uniquement IPv6 est signalé comme inaccessible.
+Les pages dépendantes de JavaScript ne sont pas rendues.
+
+Le service accepte au maximum cinq PDF et cinq liens par mail, 1 Mio par
+document téléchargé avant et après décompression gzip, 20 pages par PDF et
+40 000 caractères extraits au total.
+Le texte transmis au webhook respecte `maxBytes` et signale sa troncature.
+`includeBody: false` empêche l'extraction de liens depuis le corps du mail.
+Tout texte extrait reste une donnée externe non fiable, et peut être transmis
+au fournisseur du modèle.
+
+Pour un essai isolé, fournir à la Gateway les variables
+`MAIL_ROUTER_ANALYZER_URL` (URL HTTPS d'un service Kubernetes en
+`.svc.cluster.local`, chemin `/analyze`) et `MAIL_ROUTER_ANALYZER_TOKEN`
+(au moins 32 caractères ASCII visibles). Le même token est fourni au service
+comme `ANALYZER_TOKEN`. Le service exige les chemins de certificat et clé TLS
+`ANALYZER_TLS_CERT_FILE` et `ANALYZER_TLS_KEY_FILE`. La Gateway doit faire
+confiance à l'autorité du certificat, dont le nom doit correspondre au service.
+Les variables du client doivent être absentes pour garder le comportement
+historique. Ne pas mettre le token ou la clé privée dans Git.
+
+Le prototype du service est dans `analyzer/` :
+
+```sh
+python3 -m pip install -r analyzer/requirements.txt
+python3 -m unittest discover -s analyzer -p 'test_*.py'
+```
+
+L'image de base du Dockerfile est épinglée par digest et le paquet PDF par
+version et empreinte. Le Dockerfile n'a pas été qualifié en production. Avant tout
+déploiement, construire et épingler l'image, isoler le service et ses sorties
+au niveau réseau, protéger le trafic et le token, limiter ses ressources, et
+tester les NetworkPolicies et le traitement de documents malveillants. La
+liste de domaines du code ne constitue pas à elle seule une barrière contre
+un processus compromis. Aucune de ces étapes ne modifie les curseurs IMAP.
 
 ## Authentification
 
@@ -70,20 +132,20 @@ npm test
 npm pack
 ```
 
-La CI GitHub exécute ces contrôles sous Node 22.19.0 et Node 24 et conserve une archive npm en artefact. Aucun mail réel n’est utilisé et aucun message WhatsApp n’est envoyé par la CI. Le fichier `examples/config.json` est fictif ; adapter ses comptes, routes et références d’environnement dans la configuration de l’instance.
+La CI GitHub exécute ces contrôles sous Node 22.19.0 et Node 24 et conserve une archive npm en artefact. Elle teste aussi l'analyseur sous Python 3.13, construit son image et vérifie son démarrage Python sans privilèges ; elle ne publie pas l'image. Aucun mail réel n’est utilisé et aucun message WhatsApp n’est envoyé par la CI. Le fichier `examples/config.json` est fictif ; adapter ses comptes, routes et références d’environnement dans la configuration de l’instance.
 
 ## Installation depuis une archive
 
 La version du dépôt n’est pas nécessairement publiée sur npm. Une archive construite avec `npm pack` peut être copiée sur l’hôte puis installée via le CLI OpenClaw :
 
 ```sh
-openclaw plugins install /tmp/genopsys-openclaw-mail-router-0.3.0-experimental.2.tgz --no-enable
+openclaw plugins install /tmp/genopsys-openclaw-mail-router-0.3.0-experimental.4.tgz --no-enable
 ```
 
 Adapter les options d’acceptation des capacités à la version du CLI. Préparer la configuration avant activation et ne pas laisser fonctionner l’ancien collecteur en parallèle. Pour l’installation via le registre une fois la version publiée :
 
 ```sh
-openclaw plugins install npm:@genopsys/openclaw-mail-router@0.3.0-experimental.2 --no-enable
+openclaw plugins install npm:@genopsys/openclaw-mail-router@0.3.0-experimental.4 --no-enable
 ```
 
 Le package npm et l’ID OpenClaw sont distincts : le premier est `@genopsys/openclaw-mail-router`, le second reste `santal-mail-router`.
